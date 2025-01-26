@@ -1,16 +1,25 @@
-# This is a sample Python script.
+from app.db.session_handler import Base, engine
+from fastapi import FastAPI
+from app.routes.api import router
+from app.core.load_moke_data import load_users_to_redis
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="Alert service",
+    debug=True,
+    version="0.1"
+)
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+@app.on_event("startup")
+async def startup_event():
+    load_users_to_redis()
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+@app.get("/")
+def root():
+    return {"Message": "Root worked"}
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
+app.include_router(router)

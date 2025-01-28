@@ -9,4 +9,6 @@ COPY . .
 
 EXPOSE 8001
 
+ENV RUNNING_IN_DOCKER=True
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]

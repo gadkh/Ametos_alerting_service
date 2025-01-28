@@ -8,8 +8,9 @@ import os
 import json
 import redis
 
-load_dotenv()
-
+running_in_docker = os.getenv("RUNNING_IN_DOCKER")
+if not running_in_docker:
+    load_dotenv()
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = os.getenv("REDIS_PORT", 6380)

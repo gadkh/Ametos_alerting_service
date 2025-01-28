@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  postgres:
+  alerting_db:
     image: postgres:13
-    container_name: postgres_container_alerting
+    container_name: alerting_db
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -11,18 +11,75 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - alerting_db_data:/var/lib/postgresql/data
     restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d alert_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared_network
 
-  redis:
+  alerting_redis:
     image: redis:latest
-    container_name: redis_container_alerting
+    container_name: alerting_redis
     ports:
       - "6380:6379"
     volumes:
-      - redis_data:/data
+      - alerting_redis_data:/data
     restart: always
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared_network
+
+  alerting_service:
+    build: .
+    container_name: alerting_service
+    restart: always
+    depends_on:
+      alerting_db:
+        condition: service_healthy
+      alerting_redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://user:password@alerting_db:5432/alert_db
+      REDIS_URL: redis://alerting_redis:6379/0
+      RUNNING_IN_DOCKER: True
+      REDIS_HOST: alerting_redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+    ports:
+      - "8001:8000"
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+    networks:
+      - shared_network
+
+  celery_worker:
+    build: .
+    container_name: celery_worker
+    restart: always
+    environment:
+      RUNNING_IN_DOCKER: True
+      DATABASE_URL: postgresql://user:password@alerting_db:5432/alert_db
+      REDIS_URL: redis://alerting_redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_HOST: alerting_redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+    command: ["celery", "-A", "app.workers.alert_worker", "worker", "--loglevel=info", "--queues=events"]
+    networks:
+      - shared_network
+
 
 volumes:
-  postgres_data:
-  redis_data:
+  alerting_db_data:
+  alerting_redis_data:
+
+networks:
+  shared_network:
+    external: true

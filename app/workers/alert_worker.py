@@ -1,40 +1,20 @@
-# from celery import Celery
-# from ..core.config import RABBITMQ_URL
-# from app.db.session_handler import get_session
-# from app.services.alert_service import process_alert
-# import json
-#
-# celery_app = Celery('alert_worker', broker=RABBITMQ_URL)
-#
-#
-# @celery_app.task(queue='alerts_queue')
-# def handle_event(event_data):
-#     db_gen = get_session()
-#     db = next(db_gen)
-#     try:
-#         event = json.loads(event_data)
-#         process_alert(db, event)
-#     finally:
-#         db.close()
-#
-#
-#
-#
-#
-
 from celery import Celery
-import json
-from sqlalchemy.orm import Session
-from ..core.config import RABBITMQ_URL
 from ..db.session_handler import get_session
-from ..db.models.alerts import Alert
 from ..services.alert_service import handle_speed_violation, handle_intrusion_detection, handle_unauthorized_access
-import base64
 import os
+from dotenv import load_dotenv
+
+running_in_docker = os.getenv("RUNNING_IN_DOCKER")
+if not running_in_docker:
+    load_dotenv()
+
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+
 
 celery_app = Celery(
     "alert_service",
-    broker=os.getenv("RABBITMQ_URL", RABBITMQ_URL),
+    # broker=os.getenv("RABBITMQ_URL", RABBITMQ_URL),
+    broker=RABBITMQ_URL
 )
 
 celery_app.conf.task_routes = {
@@ -46,8 +26,6 @@ celery_app.conf.task_routes = {
 def process_event(event_data):
     """Process incoming events and generate alerts if necessary."""
     db = next(get_session())
-    print("Hellooo")
-    print(f"event_data:{event_data}")
     event_data["timestamp"] = event_data["timestamp"].isoformat()
     if event_data["device_type"] == "access_controller":
         handle_unauthorized_access(event_data, db)
